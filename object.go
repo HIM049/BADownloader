@@ -1,8 +1,8 @@
 package main
 
 type Config struct {
-	FavListLink string
-	FileName    bool
+	DownloadCount       int
+	DownloadCompilation bool
 }
 
 type FavList struct {
