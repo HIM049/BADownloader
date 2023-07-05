@@ -36,6 +36,8 @@ func start() {
 		fmt.Println("开始下载 " + " 《" + obj.Data.Pages[0].Part + "》")
 		BvDownload(ID, obj.Data.Pages[0].Part, config.DownloadCompilation)
 	}
+	fmt.Println("已完成所有下载项目！请自行退出程序")
+	fmt.Scanln()
 }
 
 func inputID() (string, string) {
