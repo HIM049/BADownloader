@@ -11,10 +11,11 @@ import (
 func BvDownload(bvid string, fileName string, downCompilation bool) {
 	cid, pageNum := analysisVideoList(bvid)
 	if pageNum > 1 && downCompilation {
-		fmt.Println("检测到该视频包含分集")
+		fmt.Println("检测到该视频包含合集")
+		fmt.Println("开始下载《" + fileName + "》的合集视频")
 		for i := 0; i < pageNum; i++ {
 			videoInf := videoPageInformationObj(bvid)
-			fmt.Println("正在下载视频《" + fileName + "》中的第 " + strconv.Itoa(i+1) + " 个视频" + videoInf.Data.Pages[i].Part)
+			fmt.Println("合集进度(" + strconv.Itoa(pageNum) + "/" + strconv.Itoa(i+1) + ") 《" + videoInf.Data.Pages[i].Part + "》")
 			videURL := getAudioURL(bvid, videoInf.Data.Pages[i].Cid)
 			Downloader(videURL, videoInf.Data.Pages[i].Part)
 			// videoInf.Data.Pic

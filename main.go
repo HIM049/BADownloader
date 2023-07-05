@@ -23,17 +23,17 @@ func start() {
 		if downloadCount == 0 {
 			downloadCount = favCount
 		}
-		fmt.Println("即将开始下载收藏夹 《" + favTitle + "》 ")
+		fmt.Println("即将开始下载收藏夹《" + favTitle + "》")
 		fmt.Println("视频总数 " + strconv.Itoa(favCount) + " 个，将下载其中的 " + strconv.Itoa(downloadCount) + " 个")
 		for i := 1; i <= downloadCount; i++ {
 			Favobj := FavListObj(ID, i)
-			fmt.Println("开始下载视频 " + strconv.Itoa(i) + " " + Favobj.Data.Medias[0].Title)
+			fmt.Println("总进度(" + strconv.Itoa(downloadCount) + "/" + strconv.Itoa(i) + ")开始下载《" + Favobj.Data.Medias[0].Title + "》")
 			BvDownload(Favobj.Data.Medias[0].Bvid, Favobj.Data.Medias[0].Title, config.DownloadCompilation)
 		}
 
 	} else {
 		obj := videoPageInformationObj(ID)
-		fmt.Println("开始下载 " + " 《" + obj.Data.Pages[0].Part + "》")
+		fmt.Println("开始下载 " + "《" + obj.Data.Pages[0].Part + "》")
 		BvDownload(ID, obj.Data.Pages[0].Part, config.DownloadCompilation)
 	}
 	fmt.Println("已完成所有下载项目！请自行退出程序")
