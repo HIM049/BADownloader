@@ -25,3 +25,4 @@ ffmpeg_output.txt
 VideoList.json
 *.m4a
 *.mp3
+*.jpg
