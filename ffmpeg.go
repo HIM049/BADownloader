@@ -9,26 +9,6 @@ import (
 	"github.com/cheggaaa/pb/v3"
 )
 
-// 通过命令行直接调用 ffmpeg
-func ConvertM4aToMp3(ffmpegPath, inputPath, outputPath, logPath string) error {
-	cmd := exec.Command(ffmpegPath, "-y", "-i", inputPath+".m4a", "-vn", "-acodec", "libmp3lame", "-ab", "192k", "-ar", "44100", outputPath+".mp3")
-	stderrFile, err := os.Create(logPath + "ffmpeg_output.txt")
-	if err != nil {
-		return err
-	}
-	defer stderrFile.Close()
-
-	cmd.Stderr = stderrFile
-	cmd.Stdout = os.Stdout
-	cmd.Stdin = os.Stdin
-
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // 多线程转码
 func ConcurrentToMp3(threads int, ffmpegPath, inputPath, outputPath, logPath string) error {
 	sem := make(chan struct{}, threads+1)
@@ -65,5 +45,25 @@ func ConcurrentToMp3(threads int, ffmpegPath, inputPath, outputPath, logPath str
 	// 等待任务执行完成
 	wg.Wait()
 	progressBar.Finish()
+	return nil
+}
+
+// 通过命令行直接调用 ffmpeg
+func ConvertM4aToMp3(ffmpegPath, inputPath, outputPath, logPath string) error {
+	cmd := exec.Command(ffmpegPath, "-y", "-i", inputPath+".m4a", "-vn", "-acodec", "libmp3lame", "-ab", "192k", "-ar", "44100", outputPath+".mp3")
+	stderrFile, err := os.Create(logPath + "ffmpeg_output.txt")
+	if err != nil {
+		return err
+	}
+	defer stderrFile.Close()
+
+	cmd.Stderr = stderrFile
+	cmd.Stdout = os.Stdout
+	cmd.Stdin = os.Stdin
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
 	return nil
 }
