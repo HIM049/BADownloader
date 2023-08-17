@@ -1,16 +1,17 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"sync"
+
+	"github.com/cheggaaa/pb/v3"
 )
 
 // 通过命令行直接调用 ffmpeg
-func ConvertM4aToMp3(inputPath, outputPath, logPath string) error {
-	cmd := exec.Command("ffmpeg", "-y", "-i", inputPath+".m4a", "-vn", "-acodec", "libmp3lame", "-ab", "192k", "-ar", "44100", outputPath+".mp3")
+func ConvertM4aToMp3(ffmpegPath, inputPath, outputPath, logPath string) error {
+	cmd := exec.Command(ffmpegPath, "-y", "-i", inputPath+".m4a", "-vn", "-acodec", "libmp3lame", "-ab", "192k", "-ar", "44100", outputPath+".mp3")
 	stderrFile, err := os.Create(logPath + "ffmpeg_output.txt")
 	if err != nil {
 		return err
@@ -29,46 +30,40 @@ func ConvertM4aToMp3(inputPath, outputPath, logPath string) error {
 }
 
 // 多线程转码
-func ConcurrentToMp3(threads int, inputPath, outputPath, logPath string) error {
-	sem := make(chan struct{}, threads)
+func ConcurrentToMp3(threads int, ffmpegPath, inputPath, outputPath, logPath string) error {
+	sem := make(chan struct{}, threads+1)
 	var wg sync.WaitGroup
-	// 转码
-	conver := func(vInf *VideoInfLite, args ...interface{}) {
-		sem <- struct{}{} // 限制并发量
-		wg.Add(1)         // 任务 +1
+	var progressBar *pb.ProgressBar
 
-		if len(args) >= 2 {
-			outputPath, ok1 := args[0].(string)
-			logPath, ok2 := args[1].(string)
-
-			if ok1 && ok2 {
-				err := ConvertM4aToMp3(inputPath+strconv.Itoa(vInf.Cid), outputPath+strconv.Itoa(vInf.Cid), logPath)
-				if err != nil {
-					return
-				}
-			} else {
-				fmt.Println(("参数类型错误"))
-				return
-			}
-		} else {
-			fmt.Println("参数数量不足")
-			return
-		}
-
-		// 下载完成后
-		defer func() {
-			<-sem     // 释放一个并发槽
-			wg.Done() // 发出任务完成通知
-		}()
-	}
-
-	// 分配任务
-	err := VideoListLoop(conver, outputPath, logPath)
+	// 获取任务队列
+	var list []VideoInformationList
+	err := LoadJsonFile(VIDEO_LIST_PATH, &list)
 	if err != nil {
 		return err
 	}
+	// 设置进度条
+	progressBar = pb.Full.Start(len(list))
+	// 遍历下载队列
+	for _, video := range list {
 
+		go func(v VideoInformationList) {
+			sem <- struct{}{} // 限制并发量
+			wg.Add(1)         // 任务 +1
+
+			err := ConvertM4aToMp3(ffmpegPath, inputPath+strconv.Itoa(v.Cid), outputPath+strconv.Itoa(v.Cid), logPath)
+			if err != nil {
+				return
+			}
+
+			// 下载完成后
+			defer func() {
+				<-sem     // 释放一个并发槽
+				wg.Done() // 发出任务完成通知
+			}()
+		}(video)
+	}
 	// 等待任务执行完成
 	wg.Wait()
+	progressBar.Finish()
 	return nil
 }
