@@ -8,6 +8,9 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync"
+
+	"github.com/cheggaaa/pb/v3"
 )
 
 // 用于获取收藏夹基本信息的函数
@@ -126,52 +129,6 @@ func GetVideoPageInformationObj(bvid string) (*VideoInformation, error) {
 	return &obj, nil
 }
 
-// 用于获取视频的分 P 列表
-// 传入 BVID
-// (本来是获取 CID 用的，但整理后发现似乎是多余的)
-// 获得如下结构体
-// type VideoPageList struct {
-// 	Code    int    `json:"code"`
-// 	Message string `json:"message"`
-// 	Data    []struct {
-// 		Cid int `json:"cid"`
-// 	}
-// }
-
-// func getVideoPageList(bvid string) (string, error) {
-// 	// 设置 URL 并发送 GET 请求
-// 	params := url.Values{}
-// 	Url, _ := url.Parse("https://api.bilibili.com/x/player/pagelist")
-// 	params.Set("bvid", bvid)
-// 	Url.RawQuery = params.Encode()
-// 	urlPath := Url.String()
-// 	resp, err := http.Get(urlPath)
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	// 将 body 转为字符串并返回
-// 	body, _ := io.ReadAll(resp.Body)
-// 	bodyString := string(body)
-// 	defer resp.Body.Close()
-// 	return bodyString, nil
-// }
-
-// func GetVideoPageListObj(bvid string) (*VideoPageList, error) {
-// 	var obj VideoPageList
-// 	body, err := getVideoPageList(bvid)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	err = decodeJson(body, &obj)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	if checkObj(obj.Code) {
-// 		return nil, errors.New(obj.Message)
-// 	}
-// 	return &obj, nil
-// }
-
 // 用于获取视频流的详细信息
 // 传入 BVID 和 CID
 // 获得如下结构体
@@ -233,7 +190,7 @@ func GetVideoObj(bvid string, cid int) (*Video, error) {
 
 // 用于下载音频流的函数
 // 传入流 URL 和文件名
-func StreamingDownloader(audioURL string, fileName string) error {
+func StreamingDownloader(audioURL string, filePathAndName string) error {
 	// 音频流下载函数。接收音频url和文件名。
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", audioURL, nil)
@@ -247,7 +204,7 @@ func StreamingDownloader(audioURL string, fileName string) error {
 	}
 	defer response.Body.Close()
 
-	out, err := os.Create("./Download/" + CheckFileName(fileName) + ".m4a")
+	out, err := os.Create(filePathAndName)
 	if err != nil {
 		return err
 	}
@@ -257,6 +214,68 @@ func StreamingDownloader(audioURL string, fileName string) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func SaveFromURL(url string, filePath string) error {
+	// 发起 HTTP 请求获取图片内容
+	response, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	// 创建目标文件
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// 将图片内容写入文件
+	_, err = io.Copy(file, response.Body)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ConcurrentSavePic(threads int, savePath string) error {
+	sem := make(chan struct{}, threads)
+	var wg sync.WaitGroup
+
+	// 获取任务队列
+	var list []VideoInformationList
+	err := LoadJsonFile(VIDEO_LIST_PATH, &list)
+	if err != nil {
+		return err
+	}
+	// 设置进度条
+	progressBar := pb.Full.Start(len(list))
+	// 遍历下载队列
+	for _, video := range list {
+
+		go func(v VideoInformationList) {
+			sem <- struct{}{} // 限制并发量
+			wg.Add(1)         // 任务 +1
+
+			err := SaveFromURL(v.Cover, savePath+strconv.Itoa(v.Cid)+".jpg")
+			if err != nil {
+				return
+			}
+
+			// 下载完成后
+			defer func() {
+				<-sem                   // 释放一个并发槽
+				wg.Done()               // 发出任务完成通知
+				progressBar.Increment() // 进度条增加
+			}()
+		}(video)
+	}
+	// 等待任务执行完成
+	wg.Wait()
+	progressBar.Finish()
 	return nil
 }
 

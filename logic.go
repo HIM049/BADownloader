@@ -1,52 +1,56 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
+	"sync"
+
+	"github.com/cheggaaa/pb/v3"
 )
 
-func Download(favlistID string, downloadCount int, downloadCompilation bool) error {
-	// 先请求一次收藏夹基础信息，用于初始化循环
-	favlist, err := GetFavListObj(favlistID, 1, 1)
+func DownloadList(threads int) error {
+	fmt.Println("开始下载任务列表")
+	sem := make(chan struct{}, threads+1)
+	var wg sync.WaitGroup
+	var progressBar *pb.ProgressBar
+
+	// 获取任务队列
+	var list []VideoInformationList
+	err := LoadJsonFile(VIDEO_LIST_PATH, &list)
 	if err != nil {
 		return err
 	}
-	fmt.Println("即将开始下载收藏夹“" + favlist.Data.Info.Title + "”")
-	fmt.Println("共有 " + strconv.Itoa(favlist.Data.Info.Media_count) + " 个视频")
-	// 如果用户输入的下载数量为 0 （全部下载）
-	if downloadCount == 0 {
-		downloadCount = favlist.Data.Info.Media_count
-	}
-	for i := 0; i < downloadCount; i++ {
-		// 请求收藏夹信息，准备下载
-		favlist, err := GetFavListObj(favlistID, 1, i+1)
-		if err != nil {
-			return err
-		}
-		// 将请求到的 BVID 传入，获取视频详情
-		vInf, err := GetVideoPageInformationObj(favlist.Data.Medias[0].Bvid)
-		if err != nil {
-			return err
-		}
-		if vInf.Data.Videos <= 1 || !downloadCompilation {
-			// 如果视频没有分 P / 用户不下载分 P
-			fmt.Println("开始下载视频《" + vInf.Data.Title + "》")
-			err = SimpleDownload(vInf.Data.Bvid, vInf.Data.Cid, CheckFileName(vInf.Data.Title))
+	// 设置进度条
+	progressBar = pb.Full.Start(len(list))
+	// 遍历下载队列
+	for _, video := range list {
+
+		go func(v VideoInformationList) {
+			// fmt.Println("调用下载")
+			// 下载完成后
+			defer func() {
+				progressBar.Increment()
+				<-sem     // 释放一个并发槽
+				wg.Done() // 发出任务完成通知
+			}()
+
+			sem <- struct{}{} // 给通道中
+			wg.Add(1)         // 任务 +1
+
+			err := SimpleDownload(v.Bvid, v.Cid, strconv.Itoa(v.Cid)+".m4a")
 			if err != nil {
-				return err
+				fmt.Printf("SimpleDownload：%s", err)
 			}
-		} else {
-			// 视频分 P 下载
-			for i := 0; i < len(vInf.Data.Pages); i++ {
-				fmt.Println("开始下载视频《" + vInf.Data.Title + "》的章节 " + strconv.Itoa(vInf.Data.Pages[i].Page))
-				err = SimpleDownload(vInf.Data.Bvid, vInf.Data.Pages[i].Cid, CheckFileName(vInf.Data.Pages[i].Part))
-				if err != nil {
-					return err
-				}
-			}
-		}
+
+		}(video)
 	}
+	// 等待任务执行完成
+	wg.Wait()
+	progressBar.Finish()
 	return nil
 }
 
@@ -55,7 +59,61 @@ func SimpleDownload(bvid string, cid int, fileName string) error {
 	if err != nil {
 		return err
 	}
-	err = StreamingDownloader(video.Data.Dash.Audio[len(video.Data.Dash.Audio)-1].BaseUrl, fileName)
+	// 下载媒体流
+	err = StreamingDownloader(video.Data.Dash.Audio[0].BaseUrl, M4A_PATH+fileName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func SaveJsonFile(filePath string, theData any) error {
+	data, err := json.MarshalIndent(theData, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(filePath, data, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// func SaveListFile(slice []VideoInformationList) error {
+// 	jsonFile, err := os.Create(VIDEO_LIST_PATH)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer jsonFile.Close()
+
+// 	// encoder := json.NewEncoder(jsonFile)
+// 	// err = encoder.Encode(slice)
+// 	// if err != nil {
+// 	// 	return err
+// 	// }
+
+// 	// // 使用 json.MarshalIndent 编码数据为格式化的 JSON 字符串
+// 	// formattedJSON, err := json.MarshalIndent(slice, "", "    ")
+// 	// if err != nil {
+// 	// 	return err
+// 	// }
+
+// 	// // 写入格式化的 JSON 数据到文件
+// 	// _, err = jsonFile.Write(formattedJSON)
+// 	// if err != nil {
+// 	// 	return err
+// 	// }
+
+// 	return nil
+// }
+
+func LoadJsonFile(filePath string, obj interface{}) error {
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(file, obj)
 	if err != nil {
 		return err
 	}
@@ -67,6 +125,20 @@ func CheckFileName(SFileN string) string {
 	re := regexp.MustCompile(`[/\$<>?:*|]`)
 	newName := re.ReplaceAllString(SFileN, "")
 	return newName
+}
+
+func ExtractTitle(input string) (string, error) {
+	// 定义书名号正则表达式
+	re := regexp.MustCompile(`《(.*?)》`)
+
+	// 查找匹配的字符串
+	matches := re.FindStringSubmatch(input)
+	if len(matches) < 2 {
+		return "", errors.New("无法找到合适的书名号")
+	}
+
+	// 返回匹配的书名号内容
+	return matches[1], nil
 }
 
 // func GetFavId(favListURL string) (string,error) {

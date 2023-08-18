@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -32,13 +33,14 @@ func ConcurrentToMp3(threads int, ffmpegPath, inputPath, outputPath, logPath str
 
 			err := ConvertM4aToMp3(ffmpegPath, inputPath+strconv.Itoa(v.Cid), outputPath+strconv.Itoa(v.Cid), logPath)
 			if err != nil {
-				return
+				fmt.Println("ConvertM4aToMp3: ", err)
 			}
 
 			// 下载完成后
 			defer func() {
 				<-sem     // 释放一个并发槽
 				wg.Done() // 发出任务完成通知
+				progressBar.Increment()
 			}()
 		}(video)
 	}
@@ -61,9 +63,9 @@ func ConvertM4aToMp3(ffmpegPath, inputPath, outputPath, logPath string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 
-	if err := cmd.Run(); err != nil {
+	err = cmd.Run()
+	if err != nil {
 		return err
 	}
-
 	return nil
 }
