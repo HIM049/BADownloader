@@ -26,11 +26,11 @@ func init() {
 	_ = os.MkdirAll("./Cache/mp3", 0755)
 	_ = os.MkdirAll("./Cache/log", 0755)
 
-	if !fileExists(CONFIG_PATH) {
-		fmt.Println("已创建默认配置文件")
-		err := createDefaultConfig()
-		fmt.Println("创建文件时错误", err)
-	}
+	// if !fileExists(CONFIG_PATH) {
+	// 	fmt.Println("已创建默认配置文件")
+	// 	err := createDefaultConfig()
+	// 	fmt.Println("创建文件时错误", err)
+	// }
 }
 
 func main() {
