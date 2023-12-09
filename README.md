@@ -1,3 +1,7 @@
+［## 使用拥有 UI 界面的全新 Bili Audio Downloader］(https://github.com/HIM049/BADownloaderUI)
+
+---
+
 # BiliAudioDownloader
 一个用于批量下载B站收藏夹中视频音频的工具  
 **如果项目对你有帮助，请给我一个 star!**  
